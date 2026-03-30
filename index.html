@@ -266,6 +266,35 @@ select{font-family:'Barlow',sans-serif;font-size:12px;color:var(--tx);background
 .live-team-logo{width:52px;height:52px;object-fit:contain;}
 .team-row-cell{display:flex;align-items:center;gap:8px;}
 
+
+/* ── GITHUB SYNC ── */
+.sync-bar{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-radius:var(--r);margin-bottom:14px;font-size:12px;border:2px solid var(--bdr2);background:var(--surf);flex-wrap:wrap;gap:8px;box-shadow:var(--sh);}
+.sync-indicator{display:flex;align-items:center;gap:7px;}
+.sync-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.sync-dot.synced{background:var(--grn);}
+.sync-dot.syncing{background:var(--amb);animation:pulse 1s infinite;}
+.sync-dot.error{background:var(--red);}
+.sync-dot.offline{background:var(--tx3);}
+.sync-msg{color:var(--tx);font-weight:600;font-size:13px;}
+.sync-sub{color:var(--tx3);font-size:11px;}
+.sync-btns{display:flex;gap:6px;}
+
+/* ── SETUP MODAL ── */
+.setup-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;align-items:center;justify-content:center;}
+.setup-overlay.open{display:flex;}
+.setup-modal{background:var(--surf);border-radius:var(--rl);padding:28px;max-width:520px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.15);}
+.setup-modal h3{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;text-transform:uppercase;margin-bottom:6px;}
+.setup-step{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--bdr);}
+.setup-step:last-of-type{border-bottom:none;}
+.setup-num{width:26px;height:26px;border-radius:50%;background:var(--blu-bg);color:var(--blu);border:1px solid var(--blu-bd);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
+.setup-body{flex:1;}
+.setup-label{font-size:13px;font-weight:600;margin-bottom:3px;}
+.setup-desc{font-size:12px;color:var(--tx3);line-height:1.5;}
+.token-input{width:100%;font-family:'DM Mono',monospace;font-size:12px;padding:10px 12px;border:1px solid var(--bdr2);border-radius:var(--r);margin-top:8px;background:var(--surf2);color:var(--tx);outline:none;}
+.token-input:focus{border-color:var(--grn);background:var(--surf);}
+.token-warning{font-size:11px;color:var(--amb);margin-top:5px;padding:6px 10px;background:var(--amb-bg);border-radius:var(--r);border:1px solid var(--amb-bd);}
+.setup-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end;}
+
 </style>
 </head>
 <body>
@@ -501,6 +530,23 @@ select{font-family:'Barlow',sans-serif;font-size:12px;color:var(--tx);background
 <!-- ══ TRACKER ══ -->
 <div id="tab-tracker" class="section">
   <div class="ph"><h2>Dashboard Performance Tracker</h2><p>The dashboard automatically tracks every recommended pick it generates. Once a game's result is known, mark the outcome to grade the model. This is a record of the <em>dashboard's</em> accuracy — not your personal bets.</p></div>
+
+  <!-- GITHUB SYNC STATUS BAR -->
+  <div class="sync-bar" id="sync-bar">
+    <div class="sync-indicator">
+      <div class="sync-dot offline" id="sync-dot"></div>
+      <div>
+        <div class="sync-msg" id="sync-msg">GitHub Sync not connected</div>
+        <div class="sync-sub" id="sync-sub">Tracker data is saved locally on this browser only — connect to sync across devices</div>
+      </div>
+    </div>
+    <div class="sync-btns">
+      <button class="btn" id="sync-now-btn" onclick="syncNow()" style="display:none">↻ Sync Now</button>
+      <button class="btn btn-verify" onclick="openSetup()" id="setup-btn" style="font-weight:700;border-width:2px">🔗 Connect GitHub Sync</button>
+      <button class="btn" onclick="disconnectGitHub()" id="disconnect-btn" style="display:none;font-size:11px;color:var(--red)">Disconnect</button>
+    </div>
+  </div>
+
   <div class="sbar" style="background:var(--blu-bg);border-color:var(--blu-bd)"><div class="sdot" style="background:var(--blu);animation:none"></div><span style="color:var(--blu)"><b>How this works:</b> Every pick in Recommended Bets is logged here automatically. After the game finishes, click the correct outcome. The dashboard grades itself.</span></div>
   <div class="pmrow">
     <div class="pm"><div class="pml">Picks Generated</div><div class="pmv" id="tr-gen">0</div><div class="pms">total issued</div></div>
@@ -693,6 +739,36 @@ select{font-family:'Barlow',sans-serif;font-size:12px;color:var(--tx);background
 <div id="tab-gloss" class="section">
   <div class="ph"><h2>Stat Glossary</h2><p>Every metric in this dashboard — definition, real-world context, and specific betting application with examples.</p></div>
   <div class="card"><div id="gloss-list"></div></div>
+</div>
+
+
+<!-- SETUP MODAL -->
+<div class="setup-overlay" id="setup-overlay">
+  <div class="setup-modal">
+    <h3>🔗 Connect GitHub Sync</h3>
+    <p style="font-size:13px;color:var(--tx3);margin-bottom:16px">Your performance tracker data will sync across all your devices via a private GitHub Gist. Your token is stored only in this browser — it is never sent anywhere except directly to GitHub's API.</p>
+    <div class="setup-step">
+      <div class="setup-num">1</div>
+      <div class="setup-body">
+        <div class="setup-label">Paste your GitHub Personal Access Token</div>
+        <div class="setup-desc">Token needs only the <b>gist</b> scope. Generate at: github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)</div>
+        <input class="token-input" id="token-input" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+        <div class="token-warning">⚠️ Never paste your token in a chat, email, or document — only enter it here directly.</div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="setup-num">2</div>
+      <div class="setup-body">
+        <div class="setup-label">What happens next</div>
+        <div class="setup-desc">The dashboard will create a private Gist called <b>mlbedge-tracker.json</b> in your GitHub account. All pick outcomes are saved there automatically. On any other device, just open the dashboard, enter your token once, and your full history syncs instantly.</div>
+      </div>
+    </div>
+    <div id="setup-error" style="display:none;color:var(--red);font-size:12px;padding:8px 12px;background:var(--red-bg);border-radius:var(--r);margin-top:10px;border:1px solid var(--red-bd)"></div>
+    <div class="setup-actions">
+      <button class="btn" onclick="closeSetup()">Cancel</button>
+      <button class="btn btn-verify" id="setup-connect-btn" onclick="connectGitHub()">Connect & Sync</button>
+    </div>
+  </div>
 </div>
 
 </div><!-- /main -->
@@ -1435,7 +1511,7 @@ function renderRecs(){
 // TRACKER
 // ──────────────────────────────────────────────────────────────────
 function filterTrk(t,btn){trkFilter=t;document.querySelectorAll('.ft').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTrk();}
-function setOutcome(id,oc){const t=loadTrk();const r=t.find(x=>x.id===id);if(r){r.outcome=r.outcome===oc?'pending':oc;}saveTrk(t);renderTrk();}
+function setOutcome(id,oc){const t=loadTrk();const r=t.find(x=>x.id===id);if(r){r.outcome=r.outcome===oc?'pending':oc;}saveTrk(t);renderTrk();afterOutcomeChange();}
 function clearTrk(){if(confirm('Reset all outcomes? The picks stay but outcomes are cleared.')){saveTrk(loadTrk().map(t=>({...t,outcome:'pending'})));renderTrk();}}
 function renderTrk(){
   const trk=loadTrk();
@@ -1747,10 +1823,301 @@ async function runVerify(){
     </div>`).join('');
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// GITHUB GIST SYNC — Cross-device performance tracker
+// Token is stored in localStorage on this device only.
+// Data is stored as a private Gist in the user's GitHub account.
+// Nothing is sent to any server except api.github.com directly.
+// ══════════════════════════════════════════════════════════════════
+
+const GIST_FILENAME = 'mlbedge-tracker.json';
+const GH_API = 'https://api.github.com';
+let syncState = 'offline'; // offline | syncing | synced | error
+let gistId = null;
+let syncTimer = null;
+
+// ── Local storage keys ──
+function getToken(){ return localStorage.getItem('mlbedge_gh_token') || ''; }
+function saveToken(t){ localStorage.setItem('mlbedge_gh_token', t); }
+function getGistId(){ return localStorage.getItem('mlbedge_gist_id') || ''; }
+function saveGistId(id){ localStorage.setItem('mlbedge_gist_id', id); }
+function clearSync(){ localStorage.removeItem('mlbedge_gh_token'); localStorage.removeItem('mlbedge_gist_id'); }
+
+// ── UI helpers ──
+function setSyncUI(state, msg, sub){
+  syncState = state;
+  const dot = document.getElementById('sync-dot');
+  const msgEl = document.getElementById('sync-msg');
+  const subEl = document.getElementById('sync-sub');
+  const syncBtn = document.getElementById('sync-now-btn');
+  const setupBtn = document.getElementById('setup-btn');
+  const discBtn = document.getElementById('disconnect-btn');
+  const bar = document.getElementById('sync-bar');
+  if(dot){ dot.className = 'sync-dot ' + state; }
+  if(msgEl && msg) msgEl.textContent = msg;
+  if(subEl && sub) subEl.textContent = sub;
+  if(syncBtn) syncBtn.style.display = (state === 'synced' || state === 'error') ? 'inline-block' : 'none';
+  if(setupBtn) setupBtn.style.display = (state === 'offline') ? 'inline-block' : 'none';
+  if(discBtn) discBtn.style.display = (state !== 'offline') ? 'inline-block' : 'none';
+  // Color-code the bar border by state
+  if(bar){
+    if(state === 'synced') bar.style.borderColor = 'var(--grn-bd)';
+    else if(state === 'syncing') bar.style.borderColor = 'var(--amb-bd)';
+    else if(state === 'error') bar.style.borderColor = 'var(--red-bd)';
+    else bar.style.borderColor = 'var(--amb-bd)'; // offline = amber = needs attention
+  }
+}
+
+// ── Setup modal ──
+function openSetup(){
+  document.getElementById('setup-overlay').classList.add('open');
+  document.getElementById('setup-error').style.display = 'none';
+  document.getElementById('token-input').value = '';
+  document.getElementById('token-input').focus();
+}
+function closeSetup(){
+  document.getElementById('setup-overlay').classList.remove('open');
+}
+
+// ── Connect to GitHub ──
+async function connectGitHub(){
+  const token = document.getElementById('token-input').value.trim();
+  const errEl = document.getElementById('setup-error');
+  const btn = document.getElementById('setup-connect-btn');
+  errEl.style.display = 'none';
+
+  if(!token || !token.startsWith('ghp_')){
+    errEl.textContent = 'Token must start with ghp_ — please check you copied it correctly.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.textContent = 'Connecting...'; btn.disabled = true;
+
+  try{
+    // Verify token works by fetching the authenticated user
+    const userR = await fetch(GH_API + '/user', {
+      headers: { Authorization: 'token ' + token, 'X-GitHub-Api-Version': '2022-11-28' }
+    });
+    if(!userR.ok){ throw new Error('Token invalid or expired (HTTP ' + userR.status + ')'); }
+    const user = await userR.json();
+
+    // Save token securely in browser
+    saveToken(token);
+
+    // Look for existing MLBEdge gist
+    let foundGistId = await findExistingGist(token);
+
+    if(foundGistId){
+      // Gist exists — load data from it
+      saveGistId(foundGistId);
+      gistId = foundGistId;
+      await pullFromGist(token, foundGistId);
+    } else {
+      // Create a new private gist
+      const newId = await createGist(token);
+      saveGistId(newId);
+      gistId = newId;
+      await pushToGist(token, newId); // seed with current local data
+    }
+
+    closeSetup();
+    setSyncUI('synced',
+      '✓ Synced with GitHub · @' + user.login,
+      'Last sync: ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + ' · Gist ID: ' + gistId.slice(0,8) + '...'
+    );
+    renderTrk();
+
+    // Auto-sync every 5 minutes while tab is open
+    if(syncTimer) clearInterval(syncTimer);
+    syncTimer = setInterval(() => syncNow(), 5 * 60 * 1000);
+
+  } catch(e){
+    errEl.textContent = 'Connection failed: ' + e.message;
+    errEl.style.display = 'block';
+    clearSync();
+  } finally {
+    btn.textContent = 'Connect & Sync'; btn.disabled = false;
+  }
+}
+
+// ── Find existing gist ──
+async function findExistingGist(token){
+  const r = await fetch(GH_API + '/gists?per_page=100', {
+    headers: { Authorization: 'token ' + token, 'X-GitHub-Api-Version': '2022-11-28' }
+  });
+  if(!r.ok) return null;
+  const gists = await r.json();
+  const found = gists.find(g => g.files && g.files[GIST_FILENAME]);
+  return found ? found.id : null;
+}
+
+// ── Create a new private gist ──
+async function createGist(token){
+  const r = await fetch(GH_API + '/gists', {
+    method: 'POST',
+    headers: {
+      Authorization: 'token ' + token,
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    },
+    body: JSON.stringify({
+      description: 'MLBEdge Performance Tracker — auto-managed, do not edit manually',
+      public: false,
+      files: {
+        [GIST_FILENAME]: { content: JSON.stringify({ tracker: [], lastUpdated: new Date().toISOString(), version: 1 }) }
+      }
+    })
+  });
+  if(!r.ok) throw new Error('Could not create Gist (HTTP ' + r.status + ')');
+  const g = await r.json();
+  return g.id;
+}
+
+// ── Push local data to Gist ──
+async function pushToGist(token, id){
+  const localData = loadTrk();
+  const payload = { tracker: localData, lastUpdated: new Date().toISOString(), version: 1 };
+  const r = await fetch(GH_API + '/gists/' + id, {
+    method: 'PATCH',
+    headers: {
+      Authorization: 'token ' + token,
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    },
+    body: JSON.stringify({
+      files: { [GIST_FILENAME]: { content: JSON.stringify(payload, null, 2) } }
+    })
+  });
+  if(!r.ok) throw new Error('Push failed (HTTP ' + r.status + ')');
+}
+
+// ── Pull data from Gist and merge with local ──
+async function pullFromGist(token, id){
+  const r = await fetch(GH_API + '/gists/' + id, {
+    headers: { Authorization: 'token ' + token, 'X-GitHub-Api-Version': '2022-11-28' }
+  });
+  if(!r.ok) throw new Error('Pull failed (HTTP ' + r.status + ')');
+  const g = await r.json();
+  const raw = g.files?.[GIST_FILENAME]?.content;
+  if(!raw) return;
+  const remote = JSON.parse(raw);
+  const remoteTracker = remote.tracker || [];
+
+  // Merge: remote is source of truth for graded outcomes,
+  // local adds any new picks that haven't synced yet
+  const local = loadTrk();
+  const merged = mergeTrackerData(local, remoteTracker);
+  saveTrk(merged);
+}
+
+// ── Smart merge: keeps all picks from both sources, prefers non-pending outcomes ──
+function mergeTrackerData(local, remote){
+  const map = new Map();
+  // Start with remote as base
+  remote.forEach(item => map.set(item.id, { ...item }));
+  // Layer local on top — prefer non-pending outcomes
+  local.forEach(item => {
+    if(map.has(item.id)){
+      const existing = map.get(item.id);
+      // If remote has a graded outcome and local is pending, keep remote
+      // If local has a graded outcome, it wins (user just graded it)
+      if(item.outcome !== 'pending'){
+        map.set(item.id, { ...existing, outcome: item.outcome });
+      }
+    } else {
+      // Local has a pick that remote doesn't — add it
+      map.set(item.id, { ...item });
+    }
+  });
+  return Array.from(map.values());
+}
+
+// ── Manual sync ──
+async function syncNow(){
+  const token = getToken();
+  const id = getGistId();
+  if(!token || !id){ openSetup(); return; }
+
+  setSyncUI('syncing', 'Syncing...', 'Connecting to GitHub');
+  try{
+    // First pull (get any changes from other devices), then push (save local changes)
+    await pullFromGist(token, id);
+    await pushToGist(token, id);
+    setSyncUI('synced',
+      '✓ Synced with GitHub',
+      'Last sync: ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})
+    );
+    renderTrk();
+  } catch(e){
+    setSyncUI('error', '⚠ Sync failed', e.message);
+  }
+}
+
+// ── Disconnect ──
+function disconnectGitHub(){
+  if(!confirm('Disconnect GitHub sync? Your local tracker data stays intact on this device.')) return;
+  if(syncTimer) clearInterval(syncTimer);
+  clearSync();
+  gistId = null;
+  setSyncUI('offline', 'GitHub Sync not connected', 'Tracker data is local to this browser only');
+}
+
+// ── Auto-save hook: called after every setOutcome ──
+async function afterOutcomeChange(){
+  const token = getToken();
+  const id = getGistId() || gistId;
+  if(!token || !id) return; // not connected, skip
+  setSyncUI('syncing', 'Saving...', 'Writing to GitHub Gist');
+  try{
+    await pushToGist(token, id);
+    setSyncUI('synced',
+      '✓ Synced with GitHub',
+      'Saved: ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})
+    );
+  } catch(e){
+    setSyncUI('error', '⚠ Sync failed — try manually', e.message);
+  }
+}
+
+// ── On page load: restore sync state if token exists ──
+async function initSync(){
+  const token = getToken();
+  const id = getGistId();
+  if(!token || !id){
+    setSyncUI('offline', 'GitHub Sync not connected', 'Tracker data is local to this browser only');
+    return;
+  }
+  gistId = id;
+  setSyncUI('syncing', 'Reconnecting to GitHub...', 'Fetching latest data');
+  try{
+    // Verify token still valid
+    const r = await fetch(GH_API + '/user', {
+      headers: { Authorization: 'token ' + token, 'X-GitHub-Api-Version': '2022-11-28' }
+    });
+    if(!r.ok) throw new Error('Token expired or revoked');
+    const user = await r.json();
+    await pullFromGist(token, id);
+    await pushToGist(token, id);
+    setSyncUI('synced',
+      '✓ Synced with GitHub · @' + user.login,
+      'Last sync: ' + new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})
+    );
+    renderTrk();
+    // Auto-sync every 5 minutes
+    if(syncTimer) clearInterval(syncTimer);
+    syncTimer = setInterval(() => syncNow(), 5 * 60 * 1000);
+  } catch(e){
+    setSyncUI('error', '⚠ Could not reconnect — token may have expired', 'Click Connect to re-authenticate');
+    clearSync();
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────
 // INIT
 // ──────────────────────────────────────────────────────────────────
-buildGloss();renderParks();renderTrk();loadAll();
+buildGloss();renderParks();renderTrk();loadAll();initSync();
 </script>
 </body>
 </html>
