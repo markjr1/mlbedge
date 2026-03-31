@@ -529,7 +529,8 @@ select{font-family:'Barlow',sans-serif;font-size:12px;color:var(--tx);background
 
 <!-- ══ TRACKER ══ -->
 <div id="tab-tracker" class="section">
-  <div class="ph"><h2>Dashboard Performance Tracker</h2><p>The dashboard automatically tracks every recommended pick it generates. Once a game's result is known, mark the outcome to grade the model. This is a record of the <em>dashboard's</em> accuracy — not your personal bets.</p></div>
+  <div id="auto-grade-banner" style="display:none;padding:9px 14px;background:var(--grn-bg);border:1px solid var(--grn-bd);border-radius:var(--r);margin-bottom:10px;font-size:13px;color:var(--grn);font-weight:600"></div>
+  <div class="ph"><h2>Dashboard Performance Tracker</h2><p>Every recommended pick is <b>auto-logged</b> and <b>auto-graded</b> from real game results. You don't touch anything — the dashboard grades itself. If an auto-grade is wrong, you can override it manually.</p></div>
 
   <!-- GITHUB SYNC STATUS BAR -->
   <div class="sync-bar" id="sync-bar">
@@ -537,7 +538,7 @@ select{font-family:'Barlow',sans-serif;font-size:12px;color:var(--tx);background
       <div class="sync-dot offline" id="sync-dot"></div>
       <div>
         <div class="sync-msg" id="sync-msg">GitHub Sync not connected</div>
-        <div class="sync-sub" id="sync-sub">Tracker data is saved locally on this browser only — connect to sync across devices</div>
+        <div class="sync-sub" id="sync-sub">Picks auto-log from Recommended Bets · Results auto-grade from game scores · Connect to sync across devices</div>
       </div>
     </div>
     <div class="sync-btns">
@@ -547,9 +548,10 @@ select{font-family:'Barlow',sans-serif;font-size:12px;color:var(--tx);background
     </div>
   </div>
 
-  <div class="sbar" style="background:var(--blu-bg);border-color:var(--blu-bd)"><div class="sdot" style="background:var(--blu);animation:none"></div><span style="color:var(--blu)"><b>How this works:</b> Every pick in Recommended Bets is logged here automatically. After the game finishes, click the correct outcome. The dashboard grades itself.</span></div>
-  <div class="pmrow">
+  <div class="sbar" style="background:var(--blu-bg);border-color:var(--blu-bd)"><div class="sdot" style="background:var(--blu);animation:none"></div><span style="color:var(--blu)"><b>Fully automatic:</b> Picks are logged when generated · Results are graded automatically from final scores (O/U checks vs. 8.5, ML checks who won) · Grades appear within 24 hours of the game ending · You can override any auto-grade if needed</span></div>
+  <div class="pmrow" style="grid-template-columns:repeat(6,minmax(0,1fr))">
     <div class="pm"><div class="pml">Picks Generated</div><div class="pmv" id="tr-gen">0</div><div class="pms">total issued</div></div>
+    <div class="pm" style="border-left:2px solid var(--grn-bd)"><div class="pml">Auto-Graded</div><div class="pmv up" id="tr-auto">0</div><div class="pms">⚙ from game results</div></div>
     <div class="pm"><div class="pml">Graded</div><div class="pmv" id="tr-tot">0</div><div class="pms">results in</div></div>
     <div class="pm"><div class="pml">Model Wins</div><div class="pmv up" id="tr-w">0</div><div class="pms">correct calls</div></div>
     <div class="pm"><div class="pml">Model Losses</div><div class="pmv dn" id="tr-l">0</div><div class="pms">incorrect calls</div></div>
@@ -881,7 +883,17 @@ function showTab(id,btn){
   document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   btn.classList.add('active');
-  if(id==='tracker')renderTrk();
+  if(id==='tracker'){
+    renderTrk();
+    // Run auto-grading silently — updates any pending picks with known results
+    autoGradePicks().then(count => {
+      if(count && count > 0){
+        renderTrk(); // re-render if anything was auto-graded
+        const sb = document.getElementById('auto-grade-banner');
+        if(sb){ sb.textContent = '✓ Auto-graded ' + count + ' pick' + (count>1?'s':'') + ' from recent game results'; sb.style.display='block'; setTimeout(()=>sb.style.display='none', 5000); }
+      }
+    }).catch(()=>{});
+  }
   if(id==='live'){loadLive();if(liveTimer)clearInterval(liveTimer);liveTimer=setInterval(loadLive,30000);}
   else{if(liveTimer){clearInterval(liveTimer);liveTimer=null;}}
   if(id==='weather')loadWeather();
@@ -1382,7 +1394,7 @@ async function buildRecs(){
       const pythPct=(exp*100).toFixed(0),actualPct=(t.pct*100).toFixed(0);
       const rsg=(t.rs/t.gp).toFixed(2),rag=(t.ra/t.gp).toFixed(2);
       recsData.push({
-        type:'ml',teamAbbr:t.abbr,title:`${t.team} — Moneyline Value`,sub:`${t.w}-${t.l} record · ${t.diff>=0?'+':''}${t.diff} run diff · ${t.gp} GP`,
+        type:'ml',teamAbbr:t.abbr,betDirection:'ml_value',title:`${t.team} — Moneyline Value`,sub:`${t.w}-${t.l} record · ${t.diff>=0?'+':''}${t.diff} run diff · ${t.gp} GP`,
         confidence:conf,confPct:cp,
         tags:[{l:'Moneyline',c:'bb'},{l:'Value Play',c:'bg'},{l:t.divShort,c:'bgy'}],
         gameInfo:gi,
@@ -1405,7 +1417,7 @@ async function buildRecs(){
     const rsg=(t.rs/t.gp).toFixed(2),pct=(((t.rs/t.gp)/lgRSG-1)*100).toFixed(0);
     const g=findGame(t.team);const gi=g?gameInfo(g):null;
     recsData.push({
-      type:'ou',teamAbbr:t.abbr,title:`${t.team} Games — Lean Over`,sub:`${rsg} RS/G · ${pct}% above lg avg · ${t.gp} GP`,
+      type:'ou',teamAbbr:t.abbr,betDirection:'over',title:`${t.team} Games — Lean Over`,sub:`${rsg} RS/G · ${pct}% above lg avg · ${t.gp} GP`,
       confidence:'medium',confPct:62,
       tags:[{l:'Over/Under',c:'ba'},{l:'Offense',c:'bg'},{l:'Over Lean',c:'bg'}],
       gameInfo:gi,
@@ -1427,7 +1439,7 @@ async function buildRecs(){
     const rag=(t.ra/t.gp).toFixed(2),pct=(((lgRAG-t.ra/t.gp)/lgRAG)*100).toFixed(0);
     const g=findGame(t.team);const gi=g?gameInfo(g):null;
     recsData.push({
-      type:'ou',teamAbbr:t.abbr,title:`${t.team} Games — Lean Under`,sub:`${rag} RA/G · ${pct}% below lg avg · ${t.gp} GP`,
+      type:'ou',teamAbbr:t.abbr,betDirection:'under',title:`${t.team} Games — Lean Under`,sub:`${rag} RA/G · ${pct}% below lg avg · ${t.gp} GP`,
       confidence:'medium',confPct:60,
       tags:[{l:'Over/Under',c:'ba'},{l:'Pitching',c:'bp'},{l:'Under Lean',c:'br'}],
       gameInfo:gi,
@@ -1449,7 +1461,7 @@ async function buildRecs(){
     const g=findGame(t.team);const gi=g?gameInfo(g):null;
     const pythExp=Math.max(.25,.5+t.diff/t.gp/10);
     recsData.push({
-      type:'ml',title:`Fade ${t.team} — Overvalued`,sub:`${t.w}-${t.l} record · ${t.diff} run diff · ${t.gp} GP`,
+      type:'ml',teamAbbr:t.abbr,betDirection:'ml_fade',title:`Fade ${t.team} — Overvalued`,sub:`${t.w}-${t.l} record · ${t.diff} run diff · ${t.gp} GP`,
       confidence:'medium',confPct:57,
       tags:[{l:'Moneyline',c:'bb'},{l:'Fade',c:'br'},{l:'Regression Risk',c:'ba'}],
       gameInfo:gi,
@@ -1467,7 +1479,7 @@ async function buildRecs(){
 
   recsData.sort((a,b)=>({high:0,medium:1,low:2}[a.confidence]-{high:0,medium:1,low:2}[b.confidence]||b.confPct-a.confPct));
   const trk=loadTrk();
-  recsData.forEach(rec=>{if(!trk.find(t=>t.id===rec.id)){trk.push({id:rec.id,title:rec.title,type:rec.type,confidence:rec.confidence,confPct:rec.confPct,date:rec.date,outcome:'pending'});}});
+  recsData.forEach(rec=>{if(!trk.find(t=>t.id===rec.id)){trk.push({id:rec.id,title:rec.title,type:rec.type,teamAbbr:rec.teamAbbr||'',betDirection:rec.betDirection||'',confidence:rec.confidence,confPct:rec.confPct,date:rec.date,outcome:'pending',autoGraded:false});}});
   saveTrk(trk);
   renderRecs();
   verifyResults.recs={ok:recsData.length>0,msg:recsData.length+' recommendations generated from live standings data',ts:new Date()};
@@ -1522,6 +1534,7 @@ function renderTrk(){
   const pct=tot>0?Math.round(wins/tot*100):null;
   // Update header metrics
   const genEl=document.getElementById('tr-gen');if(genEl)genEl.textContent=trk.length;
+  const autoEl=document.getElementById('tr-auto');if(autoEl)autoEl.textContent=trk.filter(t=>t.autoGraded).length;
   ['tr-tot','tr-w','tr-l'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[tot,wins,losses][i];});
   const pctEl=document.getElementById('tr-pct');if(pctEl)pctEl.textContent=pct!==null?pct+'%':'—';
   let grade='B',gsub='Need 10+ graded picks';
@@ -1537,7 +1550,17 @@ function renderTrk(){
     [...displayData].reverse().forEach((t,idx)=>{
       const tc=t.type==='ml'?'bb':t.type==='ou'?'ba':'bp',tl=t.type==='ml'?'ML':t.type==='ou'?'O/U':'Prop';
       const cc=t.confidence==='high'?'bg':t.confidence==='medium'?'ba':'bgy';
-      const outStatus=t.outcome==='pending'?'<span style="font-size:11px;color:var(--tx3)">Awaiting result</span>':t.outcome==='win'?'<span class="bdg bg">✓ WIN</span>':t.outcome==='loss'?'<span class="bdg br">✗ LOSS</span>':t.outcome==='push'?'<span class="bdg ba">~ PUSH</span>':'<span class="bdg bgy">Skipped</span>';
+      const autoTag = t.autoGraded ? '<span style="font-size:10px;color:var(--tx3);margin-left:4px" title="Auto-graded from game result">⚙ auto</span>' : '';
+      const gradeNoteHtml = t.autoGraded && t.gradeNote ? `<div style="font-size:11px;color:var(--tx3);margin-top:3px;font-family:'DM Mono',monospace">${t.gradeNote}</div>` : '';
+      const outStatus = t.outcome==='pending'
+        ? '<span style="font-size:11px;color:var(--tx3)">⏳ Awaiting game result</span>'
+        : t.outcome==='win'
+          ? `<div><span class="bdg bg">✓ WIN</span>${autoTag}${gradeNoteHtml}</div>`
+          : t.outcome==='loss'
+            ? `<div><span class="bdg br">✗ LOSS</span>${autoTag}${gradeNoteHtml}</div>`
+            : t.outcome==='push'
+              ? `<div><span class="bdg ba">~ PUSH</span>${autoTag}${gradeNoteHtml}</div>`
+              : '<span class="bdg bgy">—</span>';
       h+=`<tr>
         <td class="dim mn">${displayData.length-idx}</td>
         <td style="font-weight:600;max-width:200px;font-size:12px">${t.title}</td>
@@ -1548,9 +1571,10 @@ function renderTrk(){
           <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
             ${outStatus}
             <div class="obt" style="margin-left:6px">
-              <button class="ob2 ${t.outcome==='win'?'wa':''}" onclick="setOutcome('${t.id}','win')" title="Dashboard was correct">✓ Win</button>
-              <button class="ob2 ${t.outcome==='loss'?'la':''}" onclick="setOutcome('${t.id}','loss')" title="Dashboard was wrong">✗ Loss</button>
-              <button class="ob2 ${t.outcome==='push'?'pua':''}" onclick="setOutcome('${t.id}','push')" title="Push / no result">Push</button>
+              ${t.autoGraded ? '<span style="font-size:10px;color:var(--tx3);margin-right:4px">Override:</span>' : ''}
+              <button class="ob2 ${t.outcome==='win'?'wa':''}" onclick="setOutcome('${t.id}','win')">✓ Win</button>
+              <button class="ob2 ${t.outcome==='loss'?'la':''}" onclick="setOutcome('${t.id}','loss')">✗ Loss</button>
+              <button class="ob2 ${t.outcome==='push'?'pua':''}" onclick="setOutcome('${t.id}','push')">Push</button>
             </div>
           </div>
         </td>
@@ -1823,6 +1847,119 @@ async function runVerify(){
     </div>`).join('');
 }
 
+
+
+// ══════════════════════════════════════════════════════════════════
+// AUTO-GRADING ENGINE
+// Automatically grades O/U and ML picks using yesterday's results.
+// Runs once per session when the tracker tab is opened.
+// ══════════════════════════════════════════════════════════════════
+
+async function autoGradePicks(){
+  const trk = loadTrk();
+  const pendingPicks = trk.filter(t => t.outcome === 'pending' && !t.autoGraded);
+  if(!pendingPicks.length) return;
+
+  // Fetch last 3 days of scores to catch any ungraded picks
+  const results = {};
+  for(let daysAgo = 1; daysAgo <= 7; daysAgo++){
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    const ds = ymd(d);
+    try{
+      const r = await fetch(`${API}/schedule?sportId=1&date=${ds}&hydrate=linescore,team`);
+      const j = await r.json();
+      const games = (j.dates?.[0]?.games || []).filter(g => g.status?.abstractGameState === 'Final');
+      games.forEach(g => {
+        const awayAbbr = g.teams?.away?.team?.abbreviation || '';
+        const homeAbbr = g.teams?.home?.team?.abbreviation || '';
+        const awayScore = parseInt(g.teams?.away?.score) || 0;
+        const homeScore = parseInt(g.teams?.home?.score) || 0;
+        const totalRuns = awayScore + homeScore;
+        const homeWon = !!g.teams?.home?.isWinner;
+        const awayWon = !!g.teams?.away?.isWinner;
+        // Key by abbreviation for fast lookup
+        const gameData = { awayAbbr, homeAbbr, awayScore, homeScore, totalRuns, homeWon, awayWon, date: ds };
+        results[awayAbbr + '_' + ds] = gameData;
+        results[homeAbbr + '_' + ds] = gameData;
+      });
+    } catch(e){ /* skip days with no data */ }
+  }
+
+  let gradedCount = 0;
+  trk.forEach(pick => {
+    if(pick.outcome !== 'pending' || pick.autoGraded) return;
+
+    // Try to find a game for this pick's team on the pick's date or day after
+    let teamAbbr = pick.teamAbbr || '';
+    let betDir = pick.betDirection || '';
+
+    // Infer from title for legacy picks that predate betDirection storage
+    if(!betDir || !teamAbbr){
+      const title = pick.title || '';
+      if(title.includes('Lean Over')) betDir = 'over';
+      else if(title.includes('Lean Under')) betDir = 'under';
+      else if(title.includes('Moneyline Value')) betDir = 'ml_value';
+      else if(title.includes('Fade')) betDir = 'ml_fade';
+      // Extract team abbr from stored teamAbbr or try to match against standings
+      if(!teamAbbr){
+        const matched = standingsData.find(t => title.includes(t.team));
+        if(matched) teamAbbr = matched.abbr;
+      }
+    }
+    if(!teamAbbr || !betDir) return; // can't grade without both
+
+    // Check dates: pick date + 0, +1, +2 days
+    for(let offset = 0; offset <= 7; offset++){
+      // Add T12:00:00 to avoid timezone-related date shift during parsing
+      const pickDate = new Date(pick.date.includes('T') ? pick.date : pick.date + ', 12:00:00');
+      pickDate.setDate(pickDate.getDate() + offset);
+      const ds = ymd(pickDate);
+      const game = results[teamAbbr + '_' + ds];
+      if(!game) continue;
+
+      // Grade based on bet direction
+      let outcome = 'pending';
+      let gradeNote = '';
+
+      if(betDir === 'over'){
+        outcome = game.totalRuns > 8.5 ? 'win' : 'loss';
+        gradeNote = `${game.awayAbbr} ${game.awayScore}–${game.homeScore} ${game.homeAbbr} · ${game.totalRuns} runs · ${outcome === 'win' ? 'Over 8.5 ✓' : 'Under 8.5 ✗'}`;
+      } else if(betDir === 'under'){
+        outcome = game.totalRuns < 8.5 ? 'win' : game.totalRuns === 8.5 ? 'push' : 'loss';
+        gradeNote = `${game.awayAbbr} ${game.awayScore}–${game.homeScore} ${game.homeAbbr} · ${game.totalRuns} runs · ${outcome === 'win' ? 'Under 8.5 ✓' : outcome === 'push' ? 'Push =' : 'Over 8.5 ✗'}`;
+      } else if(betDir === 'ml_value'){
+        const teamWon = (game.awayAbbr === teamAbbr && game.awayWon) || (game.homeAbbr === teamAbbr && game.homeWon);
+        outcome = teamWon ? 'win' : 'loss';
+        gradeNote = `${game.awayAbbr} ${game.awayScore}–${game.homeScore} ${game.homeAbbr} · ${teamAbbr} ${outcome === 'win' ? 'won ✓' : 'lost ✗'}`;
+      } else if(betDir === 'ml_fade'){
+        const teamLost = (game.awayAbbr === teamAbbr && !game.awayWon) || (game.homeAbbr === teamAbbr && !game.homeWon);
+        outcome = teamLost ? 'win' : 'loss';
+        gradeNote = `${game.awayAbbr} ${game.awayScore}–${game.homeScore} ${game.homeAbbr} · Fade ${teamAbbr}: ${outcome === 'win' ? 'correct ✓' : 'wrong ✗'}`;
+      }
+
+      if(outcome !== 'pending'){
+        pick.outcome = outcome;
+        pick.autoGraded = true;
+        pick.gradeNote = gradeNote;
+        pick.gradedDate = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+        gradedCount++;
+        break; // found game, stop looking
+      }
+    }
+  });
+
+  if(gradedCount > 0){
+    saveTrk(trk);
+    // Push to Gist if connected
+    const token = getToken();
+    const id = getGistId();
+    if(token && id){
+      try{ await pushToGist(token, id); } catch(e){}
+    }
+  }
+  return gradedCount;
+}
 
 // ══════════════════════════════════════════════════════════════════
 // GITHUB GIST SYNC — Cross-device performance tracker
@@ -2118,6 +2255,17 @@ async function initSync(){
 // INIT
 // ──────────────────────────────────────────────────────────────────
 buildGloss();renderParks();renderTrk();loadAll();initSync();
+// Migrate legacy picks: clear stale autoGraded flags so they get re-evaluated
+(function migrateLegacyPicks(){
+  const trk = loadTrk();
+  let changed = false;
+  trk.forEach(p => {
+    // Reset any pick that was auto-graded but has no gradeNote (corrupted state)
+    if(p.autoGraded && !p.gradeNote){ p.autoGraded = false; p.outcome = 'pending'; changed = true; }
+  });
+  if(changed) saveTrk(trk);
+})();
+setTimeout(()=>autoGradePicks().then(c=>{if(c>0)renderTrk();}).catch(()=>{}), 3000);
 </script>
 </body>
 </html>
